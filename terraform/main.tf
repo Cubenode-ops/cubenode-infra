@@ -10,7 +10,15 @@ terraform {
 provider "docker" {}
 
 # =====================================================
-# NGINX WEB SERVER
+# DOCKER NETWORK (WICHTIG!)
+# =====================================================
+
+resource "docker_network" "app_network" {
+  name = "cubenode-network"
+}
+
+# =====================================================
+# NGINX REVERSE PROXY
 # =====================================================
 
 resource "docker_image" "nginx" {
@@ -25,6 +33,17 @@ resource "docker_container" "nginx" {
     internal = 80
     external = 8080
   }
+
+  networks_advanced {
+    name = docker_network.app_network.name
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/nginx.conf"
+    container_path = "/etc/nginx/conf.d/default.conf"
+  }
+
+  depends_on = [docker_container.backend]
 }
 
 # =====================================================
@@ -44,6 +63,10 @@ resource "docker_container" "postgres" {
     external = 5432
   }
 
+  networks_advanced {
+    name = docker_network.app_network.name
+  }
+
   env = [
     "POSTGRES_USER=admin",
     "POSTGRES_PASSWORD=admin123",
@@ -52,7 +75,7 @@ resource "docker_container" "postgres" {
 }
 
 # =====================================================
-# NODE.JS BACKEND API
+# NODE BACKEND
 # =====================================================
 
 resource "docker_image" "backend" {
@@ -68,13 +91,17 @@ resource "docker_container" "backend" {
     external = 3000
   }
 
+  networks_advanced {
+    name = docker_network.app_network.name
+  }
+
   env = [
-    "DB_HOST=host.docker.internal",
+    "DB_HOST=cubenode-postgres",
     "DB_PORT=5432",
     "DB_USER=admin",
     "DB_PASSWORD=admin123",
     "DB_NAME=cubenode"
   ]
+
+  depends_on = [docker_container.postgres]
 }
-
-
